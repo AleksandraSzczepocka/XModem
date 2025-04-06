@@ -27,6 +27,8 @@ def send_file(serial_port, file_bytes, mode):
             i -= 1
         elif response == bytes([CAN]):
             raise Exception("Connection canceled!")
+        elif response == bytes([C]):
+            continue
         elif response != bytes([ACK]):
             raise Exception("Protocol error!")
 
