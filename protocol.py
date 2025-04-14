@@ -1,27 +1,33 @@
-import serial
-import time
-import math
-
 SOH = 0x01
 EOT = 0x04
 ACK = 0x06
 NAK = 0x15
 CAN = 0x18
-C   = 0x43
+C = 0x43
 
-ALGEBRAIC_CHECKSUM = 0
-CRC16 = 1
+BLOCK_SIZE = 128
 
-def algebraic_checksum(data):
+def calc_checksum(data: bytes) -> int:
     return sum(data) % 256
 
-def crc16_checksum(data):
-    crc = 0xFFFF  # Inicjalizacja wartości CRC
+def calc_crc(data: bytes) -> int:
+    crc = 0
     for byte in data:
-        crc ^= byte  # XOR z bajtem danych
-        for _ in range(8):  # Proces przetwarzania każdego bitu
-            if crc & 0x0001:  # Sprawdzamy najmłodszy bit
-                crc = (crc >> 1) ^ 0xA001  # Polinom CRC-16-IBM (0x8005, odwrócony)
+        crc ^= byte << 8
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = (crc << 1) ^ 0x1021
             else:
-                crc >>= 1
-    return crc.to_bytes(2, 'little')
+                crc <<= 1
+    return crc & 0xFFFF
+
+def create_block(block_num: int, data: bytes, use_crc=False):
+    data = data.ljust(BLOCK_SIZE, b'\x1A')  # pad with 0x1A if needed
+    header = bytes([SOH, block_num % 256, 255 - (block_num % 256)])
+    if use_crc:
+        crc = calc_crc(data)
+        footer = crc.to_bytes(2, 'big')
+    else:
+        checksum = calc_checksum(data)
+        footer = bytes([checksum])
+    return header + data + footer

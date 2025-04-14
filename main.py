@@ -1,25 +1,41 @@
-from transmitter import send_file
-from receiver import receive_file
-from protocol import *
 import serial
+import sys
+from sender import send_file
+from receiver import receive_file
+
+def setup_serial(port: str, baudrate=9600) -> serial.Serial:
+    return serial.Serial(port, baudrate=baudrate, timeout=5)
 
 def main():
-    port_name = input("Podaj nazwę portu COM (np. COM3): ")
-    working_mode = int(input("Wybierz tryb pracy:\n0) wysyłanie\n1) odbieranie\n"))
-    checksum_mode = int(input("Wybierz tryb sumy kontrolnej:\n0) algebraiczna\n1) CRC16\n"))
+    if len(sys.argv) < 4:
+        print("Usage:")
+        print("  python main.py send COMx filename [crc|sum]")
+        print("  python main.py receive COMx filename")
+        return
 
-    with serial.Serial(port=port_name, baudrate=9600, timeout=1) as ser:
-        if working_mode == 0:
-            path = input("Podaj ścieżkę do pliku: ")
-            with open(path, "rb") as f:
-                file_data = f.read()
-            send_file(ser, file_data, checksum_mode)
+    mode = sys.argv[1]
+    port = sys.argv[2]
+    filename = sys.argv[3]
+    ser = setup_serial(port)
 
-        else:
-            out_path = input("Podaj nazwę pliku do zapisania: ")
-            file_data = receive_file(ser, checksum_mode)
-            with open(out_path, "wb") as f:
-                f.write(file_data)
+    if mode == 'send':
+        use_crc = False  # domyślnie suma kontrolna
+        if len(sys.argv) >= 5:
+            method = sys.argv[4].lower()
+            if method == "crc":
+                use_crc = True
+            elif method == "sum":
+                use_crc = False
+            else:
+                print("Unknown checksum method. Use 'crc' or 'sum'.")
+                return
+        send_file(ser, filename, use_crc)
+
+    elif mode == 'receive':
+        receive_file(ser, filename)
+
+    else:
+        print("Unknown mode. Use 'send' or 'receive'.")
 
 if __name__ == "__main__":
     main()

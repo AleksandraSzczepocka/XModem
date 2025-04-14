@@ -1,53 +1,50 @@
-from protocol import *
+import serial
 import time
+from protocol import *
 
-
-def receive_file(serial_port, mode):
-    print("Nasłuchiwanie nadawcy...")
-    start_time = time.time()
-    data = bytearray()
-
-    while time.time() - start_time < 60:
-        serial_port.write(bytes([C if mode == CRC16 else NAK]))
-        if serial_port.in_waiting:
-            if serial_port.read() == bytes([SOH]):
+def receive_file(ser: serial.Serial, filename: str):
+    use_crc = True
+    with open(filename, 'wb') as f:
+        # Zainicjuj transmisję
+        start = time.time()
+        while True:
+            ser.write(bytes([C if use_crc else NAK]))
+            time.sleep(1)
+            if ser.in_waiting:
                 break
-        time.sleep(0.1)
-    else:
-        raise TimeoutError("Nie znaleziono nadawcy")
+            if time.time() - start > 60:
+                print("Timeout waiting for sender.")
+                return
 
-    while True:
-        block_number = serial_port.read()[0]
-        _ = serial_port.read()  # ignored complement
-        block = serial_port.read(128)
+        expected_block = 1
+        while True:
+            start_byte = ser.read(1)
+            if start_byte == bytes([SOH]):
+                block_header = ser.read(2)
+                block_num, block_neg = block_header[0], block_header[1]
 
-        if mode == ALGEBRAIC_CHECKSUM:
-            received_checksum = serial_port.read()[0]
-            if algebraic_checksum(block) == received_checksum:
-                serial_port.write(bytes([ACK]))
-                data.extend(block)
-            else:
-                serial_port.write(bytes([NAK]))
-                continue
-        else:
-            received_crc = serial_port.read(2)
-            if received_crc == crc16_checksum(block):
-                serial_port.write(bytes([ACK]))
-                data.extend(block)
-            else:
-                serial_port.write(bytes([NAK]))
-                continue
+                if block_num != expected_block:
+                    ser.write(bytes([NAK]))
+                    continue
 
-        next_byte = serial_port.read()
-        if next_byte == bytes([EOT]):
-            serial_port.write(bytes([ACK]))
-            break
-        elif next_byte != bytes([SOH]):
-            raise Exception("Protocol error!")
+                data = ser.read(BLOCK_SIZE)
+                if use_crc:
+                    recv_crc = int.from_bytes(ser.read(2), 'big')
+                    calc = calc_crc(data)
+                    if calc != recv_crc:
+                        ser.write(bytes([NAK]))
+                        continue
+                else:
+                    recv_sum = ord(ser.read(1))
+                    calc = calc_checksum(data)
+                    if calc != recv_sum:
+                        ser.write(bytes([NAK]))
+                        continue
 
-    # Usuń końcowe NULL-e (0x00)
-    while data and data[-1] == 0x00:
-        data.pop()
+                f.write(data)
+                ser.write(bytes([ACK]))
+                expected_block += 1
 
-    print("Odebrano plik".format(len(data)))
-    return data
+            elif start_byte == bytes([EOT]):
+                ser.write(bytes([ACK]))
+                break
