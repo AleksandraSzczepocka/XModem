@@ -22,7 +22,7 @@ def calc_crc(data: bytes) -> int:
     return crc & 0xFFFF
 
 def create_block(block_num: int, data: bytes, use_crc=False):
-    data = data.ljust(BLOCK_SIZE, b'\x1A')  # pad with 0x1A if needed
+    data = data.ljust(BLOCK_SIZE, b'\x1A')
     header = bytes([SOH, block_num % 256, 255 - (block_num % 256)])
     if use_crc:
         crc = calc_crc(data)

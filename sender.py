@@ -6,7 +6,7 @@ def send_file(ser: serial.Serial, filename: str, use_crc=False):
     with open(filename, 'rb') as f:
         block_num = 1
 
-        # Czekaj na inicjację przez odbiornik
+        # Czekanie na odbiornik
         start_time = time.time()
         while True:
             if ser.in_waiting:
