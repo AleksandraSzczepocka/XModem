@@ -19,7 +19,7 @@ def receive_file(ser: serial.Serial, filename: str):
         start = time.time()
         while True:
             ser.write(bytes([C if use_crc else NAK]))
-            time.sleep(1)
+            time.sleep(10)
             if ser.in_waiting:
                 print("Odpowiedź od nadajnika, rozpoczynam odbiór...")
                 break
